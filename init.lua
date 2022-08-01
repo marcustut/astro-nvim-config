@@ -1,7 +1,4 @@
-vim.opt.guifont = "MesloLGS Nerd Font"
-
 local config = {
-
   -- Configure AstroNvim updates
   updater = {
     remote = "origin", -- remote to use
@@ -39,9 +36,11 @@ local config = {
   options = {
     opt = {
       relativenumber = true, -- sets vim.opt.relativenumber
+      guifont = "MesloLGS Nerd Font",
     },
     g = {
       mapleader = " ", -- sets vim.g.mapleader
+      neovide_remember_window_size = true, -- remember previous window size
     },
   },
 
@@ -83,6 +82,8 @@ local config = {
   plugins = {
     -- Add plugins, the packer syntax without the "use"
     init = {
+      { "github/copilot.vim" },
+      { "tpope/vim-surround" },
       -- You can disable default plugins as follows:
       -- ["goolord/alpha-nvim"] = { disable = true },
 
@@ -130,6 +131,51 @@ local config = {
     packer = {
       compile_path = vim.fn.stdpath "data" .. "/packer_compiled.lua",
     },
+    cmp = function(config)
+      -- disable copilot.vim auto mapping
+      vim.g.copilot_assume_mapped = true
+			vim.g.copilot_no_tab_map = true
+			vim.g.copilot_tab_fallback = ""
+
+      -- import cmp and luasnip
+      local cmp_status_ok, cmp = pcall(require, "cmp")
+      local snip_status_ok, luasnip = pcall(require, "luasnip")
+      if not (cmp_status_ok and snip_status_ok) then assert("cmp or luasnip not found") end
+
+      -- a function to check if there's word before cursor
+      local function has_words_before()
+        local line, col = unpack(vim.api.nvim_win_get_cursor(0))
+        return col ~= 0 and vim.api.nvim_buf_get_lines(0, line - 1, line, true)[1]:sub(col, col):match "%s" == nil
+      end
+
+      -- customize the tab key
+      config.mapping["<Tab>"] = cmp.mapping(
+        function(fallback)
+          -- receive copilot suggestions
+          local copilot_keys = vim.fn['copilot#Accept']()
+
+          -- first autocomplete copilot suggestion if there's one
+          if copilot_keys ~= '' and type(copilot_keys) == 'string' then
+            vim.api.nvim_feedkeys(copilot_keys, 'i', true)
+          elseif cmp.visible() then
+            cmp.select_next_item()
+          elseif luasnip.expandable() then
+            luasnip.expand()
+          elseif luasnip.expand_or_jumpable() then
+            luasnip.expand_or_jump()
+          elseif has_words_before() then
+            cmp.complete()
+          else
+            fallback()
+          end
+        end,
+	      {
+          "i",
+          "s",
+        }
+      )
+      return config
+    end,
   },
 
   -- LuaSnip Options
@@ -153,6 +199,7 @@ local config = {
           -- which-key registration table for normal mode, leader prefix
           ["<leader>"] = "LSP Hover",
           ["a"] = "Code actions",
+          ["r"] = "Rename symbols",
         },
       },
     },
@@ -192,6 +239,7 @@ local config = {
       local bufopts = { noremap=true, silent=true, buffer=bufnr }
       vim.keymap.set('n', '<leader><leader>', vim.lsp.buf.hover, bufopts)
       vim.keymap.set('n', '<leader>a', vim.lsp.buf.code_action, bufopts)
+      vim.keymap.set('n', '<leader>r', vim.lsp.buf.rename, bufopts)
     end,
 
     -- override the lsp installer server-registration function
